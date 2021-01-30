@@ -75,9 +75,9 @@ void TwoBodyME::Allocate()
      for (int ch_ket=ch_bra; ch_ket<nChannels;++ch_ket)
      {
         TwoBodyChannel& tbc_ket = modelspace->GetTwoBodyChannel(ch_ket);
-        if ( abs(tbc_bra.J-tbc_ket.J)>rank_J ) continue;
+        if ( std::abs(tbc_bra.J-tbc_ket.J)>rank_J ) continue;
         if ( (tbc_bra.J+tbc_ket.J)<rank_J ) continue;
-        if ( abs(tbc_bra.Tz-tbc_ket.Tz)!=rank_T ) continue; // we don't couple to T, so rank_T really means |delta Tz|
+        if ( std::abs(tbc_bra.Tz-tbc_ket.Tz)!=rank_T ) continue; // we don't couple to T, so rank_T really means |delta Tz|
         if ( (tbc_bra.parity + tbc_ket.parity + parity)%2>0 ) continue;
         MatEl[{ch_bra,ch_ket}] =  arma::mat(tbc_bra.GetNumberKets(), tbc_ket.GetNumberKets(), arma::fill::zeros);
      }
@@ -118,8 +118,8 @@ double TwoBodyME::GetTBME_norm(int ch_bra, int ch_ket, int a, int b, int c, int 
 {
    TwoBodyChannel& tbc_bra =  modelspace->GetTwoBodyChannel(ch_bra);
    TwoBodyChannel& tbc_ket =  modelspace->GetTwoBodyChannel(ch_ket);
-   int bra_ind = tbc_bra.GetLocalIndex(min(a,b),max(a,b));
-   int ket_ind = tbc_ket.GetLocalIndex(min(c,d),max(c,d));
+   int bra_ind = tbc_bra.GetLocalIndex(std::min(a,b),std::max(a,b));
+   int ket_ind = tbc_ket.GetLocalIndex(std::min(c,d),std::max(c,d));
    if (bra_ind < 0 or ket_ind < 0 or bra_ind > tbc_bra.GetNumberKets() or ket_ind > tbc_ket.GetNumberKets() )
      return 0;
    Ket & bra = tbc_bra.GetKet(bra_ind);
@@ -139,8 +139,8 @@ void TwoBodyME::SetTBME(int ch_bra, int ch_ket, int a, int b, int c, int d, doub
 {
    TwoBodyChannel& tbc_bra =  modelspace->GetTwoBodyChannel(ch_bra);
    TwoBodyChannel& tbc_ket =  modelspace->GetTwoBodyChannel(ch_ket);
-   int bra_ind = tbc_bra.GetLocalIndex(min(a,b),max(a,b));
-   int ket_ind = tbc_ket.GetLocalIndex(min(c,d),max(c,d));
+   int bra_ind = tbc_bra.GetLocalIndex(std::min(a,b),std::max(a,b));
+   int ket_ind = tbc_ket.GetLocalIndex(std::min(c,d),std::max(c,d));
    double phase = 1;
    if (a>b) phase *= tbc_bra.GetKet(bra_ind).Phase(tbc_bra.J);
    if (c>d) phase *= tbc_ket.GetKet(ket_ind).Phase(tbc_ket.J);
@@ -156,8 +156,8 @@ void TwoBodyME::AddToTBME(int ch_bra, int ch_ket, int a, int b, int c, int d, do
    TwoBodyChannel& tbc_bra =  modelspace->GetTwoBodyChannel(ch_bra);
    TwoBodyChannel& tbc_ket =  modelspace->GetTwoBodyChannel(ch_ket);
 //   cout << "Tzbra = " << tbc_bra.Tz << "   Tzket = " << tbc_ket.Tz << "  rank_T = " << rank_T << endl;
-   int bra_ind = tbc_bra.GetLocalIndex(min(a,b),max(a,b));
-   int ket_ind = tbc_ket.GetLocalIndex(min(c,d),max(c,d));
+   int bra_ind = tbc_bra.GetLocalIndex(std::min(a,b),std::max(a,b));
+   int ket_ind = tbc_ket.GetLocalIndex(std::min(c,d),std::max(c,d));
 //   cout << "bra_ind = " << bra_ind << " = local index of " << min(a,b) << " " << max(a,b) << " from channel " << ch_bra << endl;
 //   cout << "ket_ind = " << ket_ind << " = local index of " << min(c,d) << " " << max(c,d) << " from channel " << ch_ket << endl;
    double phase = 1;
@@ -165,9 +165,9 @@ void TwoBodyME::AddToTBME(int ch_bra, int ch_ket, int a, int b, int c, int d, do
    if (c>d) phase *= tbc_ket.GetKet(ket_ind).Phase(tbc_ket.J);
    if (ch_bra > ch_ket)
    {
-    swap(ch_bra,ch_ket);
+    std::swap(ch_bra,ch_ket);
 //    swap(tbc_bra,tbc_ket);
-    swap(bra_ind,ket_ind);
+    std::swap(bra_ind,ket_ind);
     phase *= modelspace->phase(tbc_bra.J-tbc_ket.J);
    }
 //   cout << "Getting Matrix " << ch_bra << "," << ch_ket << "(" << bra_ind << "," << ket_ind
@@ -209,8 +209,8 @@ void TwoBodyME::AddToTBME(int ch_bra, int ch_ket, int ibra, int iket, double tbm
 {
    if (ch_bra>ch_ket)
    {
-     swap(ch_bra,ch_ket);
-     swap(ibra,iket);
+     std::swap(ch_bra,ch_ket);
+     std::swap(ibra,iket);
      tbme *= modelspace->phase( modelspace->GetTwoBodyChannel(ch_bra).J - modelspace->GetTwoBodyChannel(ch_ket).J);
    }
    GetMatrix(ch_bra,ch_ket)(ibra,iket) += tbme;
@@ -271,8 +271,8 @@ double TwoBodyME::GetTBME_J(int j_bra, int j_ket, int a, int b, int c, int d) co
    int Tz_bra = (oa.tz2+ob.tz2)/2;
    int Tz_ket = (oc.tz2+od.tz2)/2;
    if ( (parity+parity_bra+parity_ket)%2 > 0) return 0;
-   if ( abs(Tz_bra-Tz_ket)!=rank_T) return 0;
-   if ( abs(j_bra-j_ket) > rank_J) return 0;
+   if ( std::abs(Tz_bra-Tz_ket)!=rank_T) return 0;
+   if ( std::abs(j_bra-j_ket) > rank_J) return 0;
    if ( j_bra + j_ket < rank_J) return 0;
    int ch_bra = modelspace->GetTwoBodyChannelIndex(j_bra,parity_bra,Tz_bra);
    int ch_ket = modelspace->GetTwoBodyChannelIndex(j_ket,parity_ket,Tz_ket);
@@ -313,8 +313,8 @@ double TwoBodyME::GetTBME_J_norm(int j_bra, int j_ket, int a, int b, int c, int 
    int Tz_bra = (oa.tz2+ob.tz2)/2;
    int Tz_ket = (oc.tz2+od.tz2)/2;
    if ( (parity+parity_bra+parity_ket)%2 > 0) return 0;
-   if ( abs(Tz_bra-Tz_ket)!=rank_T) return 0;
-   if ( abs(j_bra-j_ket) > rank_J) return 0;
+   if ( std::abs(Tz_bra-Tz_ket)!=rank_T) return 0;
+   if ( std::abs(j_bra-j_ket) > rank_J) return 0;
    if ( j_bra + j_ket < rank_J) return 0;
    int ch_bra = modelspace->GetTwoBodyChannelIndex(j_bra,parity_bra,Tz_bra);
    int ch_ket = modelspace->GetTwoBodyChannelIndex(j_ket,parity_ket,Tz_ket);
@@ -504,7 +504,7 @@ double TwoBodyME::GetTBMEmonopole(int a, int b, int c, int d) const
 
    if (Tzab != Tzcd or parityab != paritycd) return 0;
 
-   int jmin = abs(oa.j2 - ob.j2)/2;
+   int jmin = std::abs(oa.j2 - ob.j2)/2;
    int jmax = (oa.j2 + ob.j2)/2;
    
    for (int J=jmin;J<=jmax;++J)
@@ -530,7 +530,7 @@ double TwoBodyME::GetTBMEmonopole_norm(int a, int b, int c, int d) const
 
    if (Tzab != Tzcd or parityab != paritycd) return 0;
 
-   int jmin = abs(oa.j2 - ob.j2)/2;
+   int jmin = std::abs(oa.j2 - ob.j2)/2;
    int jmax = (oa.j2 + ob.j2)/2;
    
    for (int J=jmin;J<=jmax;++J)
@@ -620,13 +620,13 @@ double TwoBodyME::GetTBMEmonopole(Ket & bra, Ket & ket) const
 //  int e12 = 2*(n+N)+lam+LAM;
 //  for (int l1=0; l1<=e12;++l1)
 //  {
-//    for (int l2=abs(L-l1)+(lam+LAM+L)%2; l2<=min(e12-l1,l1+L); l2+=2) // triangle condition and parity
+//    for (int l2=std::abs(L-l1)+(lam+LAM+L)%2; l2<=min(e12-l1,l1+L); l2+=2) // triangle condition and parity
 //    {
 //      for (int twoj1=2*l1-1; twoj1<=2*l1+1; twoj1+=2)
 //      {
 //        for (int twoj2=2*l2-1; twoj2<=2*l2+1; twoj2+=2)
 //        {
-//          if ( abs(twoj1-twoj2)>2*J or (twoj1+twoj2)<2*J) continue; // triangle condition
+//          if ( std::abs(twoj1-twoj2)>2*J or (twoj1+twoj2)<2*J) continue; // triangle condition
 //          double normninej = sqrt( (twoj1+1)*(twoj2+1)*(2*L+1)*(2*S+1) ) *modelspace->GetNineJ(l1,0.5,twoj1*0.5, l2,0.5,twoj1*0.5, L, S, J);
 ////          cout << "{ " << l1 << " " << "1/2" << " " << twoj1 << "/2 " << "}" << endl; 
 ////          cout << "{ " << l2 << " " << "1/2" << " " << twoj2 << "/2 " << "}" << endl; 
@@ -644,7 +644,7 @@ double TwoBodyME::GetTBMEmonopole(Ket & bra, Ket & ket) const
 //              index_t p = modelspace->GetOrbitIndex(n1,l1,twoj1,twotz1);
 //              index_t q = modelspace->GetOrbitIndex(n2,l2,twoj2,twotz2);
 //              double overlap = normninej*moshinsky*IsospinCG;
-//              if ( abs(overlap)<1e-7 ) continue;
+//              if ( std::abs(overlap)<1e-7 ) continue;
 //              int ketindex = modelspace->GetKetIndex( p, q );
 //              if (p>q)
 //              {
@@ -686,8 +686,8 @@ double TwoBodyME::Norm() const
       const arma::mat& matrix = itmat.second;
       int Jbra = modelspace->GetTwoBodyChannel( itmat.first[0] ).J;
       int Jket = modelspace->GetTwoBodyChannel( itmat.first[1] ).J;
-      int degeneracy = (2*Jket+1) * (min(Jbra,Jket+rank_J) - max(-Jbra,Jket-rank_J)+1);
-//      int degeneracy = 1;//(2*Jket+1) * (min(Jbra,Jket+rank_J) - max(-Jbra,Jket-rank_J)+1);
+      int degeneracy = (2*Jket+1) * (std::min(Jbra,Jket+rank_J) - std::max(-Jbra,Jket-rank_J)+1);
+//      int degeneracy = 1;//(2*Jket+1) * (std::min(Jbra,Jket+rank_J) - std::max(-Jbra,Jket-rank_J)+1);
 //      double n2 = arma::norm(matrix,"fro");
       double n2 = arma::norm(matrix,"fro") * degeneracy;
 //      nrm += n2*n2;
@@ -765,7 +765,7 @@ int TwoBodyME::size()
 
 
 
-void TwoBodyME::WriteBinary( ofstream& of )
+void TwoBodyME::WriteBinary( std::ofstream& of )
 {
   of.write((char*)&nChannels,sizeof(nChannels));
   of.write((char*)&hermitian,sizeof(hermitian));
@@ -779,7 +779,7 @@ void TwoBodyME::WriteBinary( ofstream& of )
 }
 
 
-void TwoBodyME::ReadBinary( ifstream& of )
+void TwoBodyME::ReadBinary( std::ifstream& of )
 {
   of.read((char*)&nChannels,sizeof(nChannels));
   of.read((char*)&hermitian,sizeof(hermitian));

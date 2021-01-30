@@ -2,6 +2,9 @@
 #include "HartreeFock.hh"
 #include "ModelSpace.hh"
 #include <iomanip>
+#include <vector>
+#include <array>
+#include <map>
 #include <utility> // for make_pair
 #include "gsl/gsl_sf_gamma.h" // for radial wave function
 #include "gsl/gsl_sf_laguerre.h" // for radial wave function
@@ -15,7 +18,7 @@
 #define M_NUCLEON 938.9185 // average nucleon mass in MeV
 
 
-using namespace std;
+//using namespace std;
 
 HartreeFock::HartreeFock(Operator& hbare)
   : Hbare(hbare), modelspace(hbare.GetModelSpace()), 
@@ -38,7 +41,7 @@ HartreeFock::HartreeFock(Operator& hbare)
      }
    }
    prev_energies = arma::vec(norbits,arma::fill::zeros);
-   vector<double> occvec;
+   std::vector<double> occvec;
    for (auto& h : modelspace->holes) occvec.push_back(modelspace->GetOrbit(h).occ);
    holeorbs = arma::uvec(modelspace->holes);
    hole_occ = arma::rowvec(occvec);
@@ -76,20 +79,20 @@ void HartreeFock::Solve()
    }
    CalcEHF();
 
-   cout << setw(15) << setprecision(10);
+   std::cout << std::setw(15) << std::setprecision(10);
    if (iterations < maxiter)
    {
-      cout << "HF converged after " << iterations << " iterations. " << endl;
+      std::cout << "HF converged after " << iterations << " iterations. " << std::endl;
    }
    else
    {
-      cout << "!!!! Warning: Hartree-Fock calculation didn't converge after " << iterations << " iterations." << endl;
-      cout << "!!!! Last " << convergence_ediff.size() << " points in convergence check:";
-      for (auto& x : convergence_ediff ) cout << x << " ";
-      cout << "  (tolerance = " << tolerance << ")" << endl;
-      cout << "!!!! Last " << convergence_EHF.size() << "  EHF values: ";
-      for (auto& x : convergence_EHF ) cout << x << " ";
-      cout << endl;
+      std::cout << "!!!! Warning: Hartree-Fock calculation didn't converge after " << iterations << " iterations." << std::endl;
+      std::cout << "!!!! Last " << convergence_ediff.size() << " points in convergence check:";
+      for (auto& x : convergence_ediff ) std::cout << x << " ";
+      std::cout << "  (tolerance = " << tolerance << ")" << std::endl;
+      std::cout << "!!!! Last " << convergence_EHF.size() << "  EHF values: ";
+      for (auto& x : convergence_EHF ) std::cout << x << " ";
+      std::cout << std::endl;
    }
    PrintEHF();
 }
@@ -134,11 +137,11 @@ void HartreeFock::CalcEHF()
 //**************************************************************************************
 void HartreeFock::PrintEHF()
 {
-   cout << fixed <<  setprecision(7);
-   cout << "e1hf = " << e1hf << endl;
-   cout << "e2hf = " << e2hf << endl;
-   cout << "e3hf = " << e3hf << endl;
-   cout << "EHF = "  << EHF  << endl;
+   std::cout << std::fixed <<  std::setprecision(7);
+   std::cout << "e1hf = " << e1hf << std::endl;
+   std::cout << "e2hf = " << e2hf << std::endl;
+   std::cout << "e3hf = " << e3hf << std::endl;
+   std::cout << "EHF = "  << EHF  << std::endl;
 }
 
 //*********************************************************************
@@ -168,8 +171,8 @@ void HartreeFock::Diagonalize()
          ++diag_tries;
          if (diag_tries > 5)
          {
-           cout << "Hartree-Fock: Failed to diagonalize the submatrix " 
-                << " on iteration # " << iterations << ". The submatrix looks like:" << endl;
+           std::cout << "Hartree-Fock: Failed to diagonalize the submatrix " 
+                << " on iteration # " << iterations << ". The submatrix looks like:" << std::endl;
            F_ch.print();
            break;
          }
@@ -292,12 +295,12 @@ void HartreeFock::BuildMonopoleV3()
       int j2d = modelspace->GetOrbit(d).j2;
       int j2j = modelspace->GetOrbit(j).j2;
  
-      int j2min = max( abs(j2a-j2c), abs(j2b-j2d) )/2;
-      int j2max = min( j2a+j2c, j2b+j2d )/2;
+      int j2min = std::max( std::abs(j2a-j2c), std::abs(j2b-j2d) )/2;
+      int j2max = std::min( j2a+j2c, j2b+j2d )/2;
       for (int j2=j2min; j2<=j2max; ++j2)
       {
-        int Jmin = max( abs(2*j2-j2i), abs(2*j2-j2j) );
-        int Jmax = 2*j2 + min(j2i, j2j);
+        int Jmin = std::max( std::abs(2*j2-j2i), std::abs(2*j2-j2j) );
+        int Jmax = 2*j2 + std::min(j2i, j2j);
         for (int J2=Jmin; J2<=Jmax; J2+=2)
         {
            v += Hbare.ThreeBody.GetME_pn(j2,j2,J2,a,c,i,b,d,j) * (J2+1);
@@ -307,7 +310,8 @@ void HartreeFock::BuildMonopoleV3()
       #pragma omp atomic write
       Vmon3[ind] = v ;
    }
-
+   std::cout << "HartreeFock::BuildMonopoleV3  storing " << Vmon3.size() << " doubles for Vmon3 and "
+             << Vmon3_keys.size() << " uint64's for Vmon3_keys." << std::endl;
 
    profiler.timer["HF_BuildMonopoleV3"] += omp_get_wtime() - start_time;
 }
@@ -360,13 +364,15 @@ void HartreeFock::FillLowestOrbits()
 {
   // vector of indices such that they point to elements of F(i,i)
   // in ascending order of energy
-  arma::uvec sorted_indices = arma::stable_sort_index( F.diag() );
+  arma::mat F_trans = C.t() * F * C;
+//  arma::uvec sorted_indices = arma::stable_sort_index( F.diag() );
+  arma::uvec sorted_indices = arma::stable_sort_index( F_trans.diag() );
   int targetZ = modelspace->GetZref();
   int targetN = modelspace->GetAref() - targetZ;
   int placedZ = 0;
   int placedN = 0;
-  vector<index_t> holeorbs_tmp; 
-  vector<double> hole_occ_tmp;
+  std::vector<index_t> holeorbs_tmp; 
+  std::vector<double> hole_occ_tmp;
 
   for (auto i : sorted_indices)
   {
@@ -375,21 +381,22 @@ void HartreeFock::FillLowestOrbits()
     if (oi.tz2 < 0 and (placedZ<targetZ))
     {
       holeorbs_tmp.push_back(i);
-      hole_occ_tmp.push_back( min(1.0,double(targetZ-placedZ)/(oi.j2+1) ) );
-      placedZ = min(placedZ+oi.j2+1,targetZ);
+      hole_occ_tmp.push_back( std::min(1.0,double(targetZ-placedZ)/(oi.j2+1) ) );
+      placedZ = std::min(placedZ+oi.j2+1,targetZ);
     }
     else if (oi.tz2 > 0 and (placedN<targetN))
     {
       holeorbs_tmp.push_back(i);
-      hole_occ_tmp.push_back( min(1.0,double(targetN-placedN)/(oi.j2+1) ) );
-      placedN = min(placedN+oi.j2+1,targetN);
+      hole_occ_tmp.push_back( std::min(1.0,double(targetN-placedN)/(oi.j2+1) ) );
+      placedN = std::min(placedN+oi.j2+1,targetN);
     }
 
     if((placedZ >= targetZ) and (placedN >= targetN) ) break;
   }
 
   holeorbs = arma::uvec( holeorbs_tmp );
-  hole_occ = arma::rowvec( hole_occ );
+  hole_occ = arma::rowvec( hole_occ_tmp );
+//  hole_occ = arma::rowvec( hole_occ );
 }
 
 
@@ -425,11 +432,11 @@ void HartreeFock::UpdateF()
             Orbit& oa = modelspace->GetOrbit(a);
             int Tz = (oi.tz2+oa.tz2)/2;
             int parity = (oi.l+oa.l)%2;
-            int bra = modelspace->GetKetIndex(min(i,a),max(i,a));
+            int bra = modelspace->GetKetIndex(std::min(i,a),std::max(i,a));
             int local_bra = modelspace->MonopoleKets[Tz+1][parity][bra];
             for (int b : Hbare.OneBodyChannels.at({oa.l,oa.j2,oa.tz2}) )
             {
-               int ket = modelspace->GetKetIndex(min(j,b),max(j,b));
+               int ket = modelspace->GetKetIndex(std::min(j,b),std::max(j,b));
                int local_ket = modelspace->MonopoleKets[Tz+1][parity][ket];
                // 2body term <ai|V|bj>
                if ((a>i) xor (b>j))  // code needed some obfuscation, so threw an xor in there...
@@ -445,7 +452,7 @@ void HartreeFock::UpdateF()
    if (Hbare.GetParticleRank()>=3) 
    {
       // it's just a one-body matrix, so we can store different copy for each thread.
-      vector<arma::mat> V3vec(omp_get_max_threads(),V3ij);
+      std::vector<arma::mat> V3vec(omp_get_max_threads(),V3ij);
       #pragma omp parallel for schedule(dynamic,1)
       for (size_t ind=0;ind<Vmon3.size(); ++ind)
       {
@@ -540,6 +547,9 @@ void HartreeFock::ReorderCoefficients()
 }
 
 
+
+
+
 //**************************************************************************
 /// Takes in an operator expressed in the basis of the original Hamiltonian,
 /// and returns that operator in the Hartree-Fock basis.
@@ -628,6 +638,26 @@ Operator HartreeFock::TransformToHFBasis( Operator& OpHO)
 }
 
 
+// If the lowest orbits are different from our previous guess, we should update the reference.
+void HartreeFock::UpdateReference()
+{
+
+  bool changed_occupations = false;
+  std::map<index_t,double> hole_map;
+  for (index_t i=0;i<holeorbs.size();++i)  
+  {
+     hole_map[holeorbs[i]] = hole_occ[i];
+     if ( std::abs(modelspace->GetOrbit( holeorbs[i] ).occ - hole_occ[i]) > 1e-3)
+     {
+        changed_occupations = true;
+        std::cout << "After HF, occupation of orbit " << holeorbs[i] << " has changed. Modelspace will be updated." << std::endl;
+     }
+  }
+  if (changed_occupations)  modelspace->SetReference( hole_map );
+
+}
+
+
 Operator HartreeFock::GetNormalOrderedH(arma::mat& Cin) 
 {
   C=Cin;
@@ -649,20 +679,20 @@ Operator HartreeFock::GetNormalOrderedH(arma::mat& Cin)
 Operator HartreeFock::GetNormalOrderedH() 
 {
    double start_time = omp_get_wtime();
-   cout << "Getting normal-ordered H in HF basis" << endl;
+   std::cout << "Getting normal-ordered H in HF basis" << std::endl;
 
    // First, check if we need to update the occupation numbers for the reference
    if (not freeze_occupations)
    {
      bool changed_occupations = false;
-     map<index_t,double> hole_map;
+     std::map<index_t,double> hole_map;
      for (index_t i=0;i<holeorbs.size();++i)  
      {
         hole_map[holeorbs[i]] = hole_occ[i];
-        if ( abs(modelspace->GetOrbit( holeorbs[i] ).occ - hole_occ[i]) > 1e-3)
+        if ( std::abs(modelspace->GetOrbit( holeorbs[i] ).occ - hole_occ[i]) > 1e-3)
         {
            changed_occupations = true;
-           cout << "After HF, occupation of orbit " << i << " has changed. Modelspace will be updated." << endl;
+           std::cout << "After HF, occupation of orbit " << i << " has changed. Modelspace will be updated." << std::endl;
         }
      }
      if (changed_occupations)  modelspace->SetReference( hole_map );
@@ -712,7 +742,8 @@ Operator HartreeFock::GetNormalOrderedH()
               {
                 Orbit & ob = modelspace->GetOrbit(b);
                 if ( 2*ob.n+ob.l+e2ket > Hbare.GetE3max() ) continue;
-                int J3min = abs(2*J-oa.j2);
+                if ( std::abs(rho(a,b)) < 1e-8 ) continue; // Turns out this helps a bit (factor of 5 speed up in tests)
+                int J3min = std::abs(2*J-oa.j2);
                 int J3max = 2*J + oa.j2;
                 for (int J3=J3min; J3<=J3max; J3+=2)
                 {
@@ -744,12 +775,12 @@ Operator HartreeFock::GetNormalOrderedH()
 void HartreeFock::FreeVmon()
 {
    // free up some memory
-   array< array< arma::mat,2>,3>().swap(Vmon);
-   array< array< arma::mat,2>,3>().swap(Vmon_exch);
+   std::array< std::array< arma::mat,2>,3>().swap(Vmon);
+   std::array< std::array< arma::mat,2>,3>().swap(Vmon_exch);
 //   vector< pair<const array<int,6>,double>>().swap( Vmon3 );
 //   vector< pair<const uint64_t,double>>().swap( Vmon3 );
-   vector< double>().swap( Vmon3 );
-   vector< uint64_t>().swap( Vmon3_keys );
+   std::vector< double>().swap( Vmon3 );
+   std::vector< uint64_t>().swap( Vmon3_keys );
 }
 
 
@@ -777,18 +808,39 @@ Operator HartreeFock::GetOmega()
 
 void HartreeFock::PrintSPE()
 {
+  arma::mat F_trans = C.t() * F * C;
   for (int i=0;i<modelspace->GetNumberOrbits();++i)
   {
     Orbit& oi = modelspace->GetOrbit(i);
-    cout << fixed << setw(3) << oi.n << " " << setw(3) << oi.l << " "
-         << setw(3) << oi.j2 << " " << setw(3) << oi.tz2 << "   " << setw(10) << F(i,i) << endl;
+    std::cout << std::fixed << std::setw(3) << oi.n << " " << std::setw(3) << oi.l << " "
+         << std::setw(3) << oi.j2 << " " << std::setw(3) << oi.tz2 << "   " << std::setw(10) << F_trans(i,i) << std::endl;
+//         << std::setw(3) << oi.j2 << " " << std::setw(3) << oi.tz2 << "   " << std::setw(10) << F(i,i) << std::endl;
   }
 
 }
 
+void HartreeFock::PrintSPEandWF()
+{
+  arma::mat F_trans = C.t() * F * C;
+  std::cout << std::fixed << std::setw(3) << "i" << ": " << std::setw(3) << "n" << " " << std::setw(3) << "l" << " "
+       << std::setw(3) << "2j" << " " << std::setw(3) << "2tz" << "   " << std::setw(12) << "SPE" << " " << std::setw(12) << "occ." << "   |   " << " overlaps" << std::endl;
+  for (int i=0;i<modelspace->GetNumberOrbits();++i)
+  {
+    Orbit& oi = modelspace->GetOrbit(i);
+    std::cout << std::fixed << std::setw(3) << i << ": " << std::setw(3) << oi.n << " " << std::setw(3) << oi.l << " "
+         << std::setw(3) << oi.j2 << " " << std::setw(3) << oi.tz2 << "   " << std::setw(12) << std::setprecision(6) << F_trans(i,i) << " " << std::setw(12) << oi.occ << "   | ";
+//         << std::setw(3) << oi.j2 << " " << std::setw(3) << oi.tz2 << "   " << std::setw(12) << std::setprecision(6) << F(i,i) << " " << std::setw(12) << oi.occ << "   | ";
+    for (int j : Hbare.OneBodyChannels.at({oi.l,oi.j2,oi.tz2}) )
+    {
+      std::cout << std::setw(9) << C(i,j) << "  ";
+    }
+    std::cout << std::endl;
+  }
+}
 
 
-void HartreeFock::GetRadialWF(index_t index, vector<double>& R, vector<double>& PSI)
+
+void HartreeFock::GetRadialWF(index_t index, std::vector<double>& R, std::vector<double>& PSI)
 {
   PSI.resize(0);
   for (double r : R)

@@ -1,10 +1,5 @@
-//#include "ModelSpace.hh"
-//#include "ReadWrite.hh"
-//#include "Operator.hh"
-//#include "HartreeFock.hh"
-//#include "IMSRGSolver.hh"
-//#include "imsrg_util.hh"
-//#include "AngMom.hh"
+#include <Python.h>
+
 #include "IMSRG.hh"
 #include <string>
 
@@ -38,9 +33,11 @@ namespace py = pybind11;
   Operator HF_GetNormalOrderedH(HartreeFock& self){ return self.GetNormalOrderedH();};
 
 //BOOST_PYTHON_MODULE(pyIMSRG)
-PYBIND11_PLUGIN(pyIMSRG)
+//PYBIND11_PLUGIN(pyIMSRG)
+PYBIND11_MODULE(pyIMSRG, m)
 {
-  py::module m("pyIMSRG", "python bindings for IMSRG code");
+//  py::module m("pyIMSRG", "python bindings for IMSRG code");
+  m.doc() = "python bindings for IMSRG code";
 
 //   py::class<vector<string> > vector_string("vector_string")
 //      .def (vector_indexing_suite< vector<string> >())
@@ -315,6 +312,7 @@ PYBIND11_PLUGIN(pyIMSRG)
    m.def("Isospin2_Op",      imsrg_util::Isospin2_Op);
    m.def("LdotS_Op",         imsrg_util::LdotS_Op);
    m.def("HO_density",       imsrg_util::HO_density);
+   m.def("HO_Radial_psi",    imsrg_util::HO_Radial_psi);
    m.def("GetOccupationsHF", imsrg_util::GetOccupationsHF);
    m.def("GetOccupations",   imsrg_util::GetOccupations);
    m.def("GetDensity",       imsrg_util::GetDensity);
@@ -336,6 +334,6 @@ PYBIND11_PLUGIN(pyIMSRG)
    m.def("Moshinsky",AngMom::Moshinsky);
 
 
-  return m.ptr();
+//  return m.ptr();
 
 }

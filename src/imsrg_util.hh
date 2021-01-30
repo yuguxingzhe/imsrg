@@ -1,3 +1,22 @@
+///////////////////////////////////////////////////////////////////////////////////
+//    imsrg_util.hh, part of  imsrg++
+//    Copyright (C) 2018  Ragnar Stroberg
+//
+//    This program is free software; you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation; either version 2 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License along
+//    with this program; if not, write to the Free Software Foundation, Inc.,
+//    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+///////////////////////////////////////////////////////////////////////////////////
+
 #ifndef imsrg_util_hh
 #define imsrg_util_hh 1
 
@@ -14,6 +33,8 @@
 #define HBARC 197.3269718 // hc in MeV * fm
 #define M_NUCLEON 938.9185 // average nucleon mass in MeV
 #define PI 3.14159265359 // put in by CP for the BMEs
+#define M_PROTON  938.2720813
+#define M_NEUTRON 939.5654133
 
 #ifndef ISQRT2
   #define ISQRT2 0.70710678118654752440L
@@ -37,6 +58,7 @@ namespace imsrg_util
  Operator Trel_Op(ModelSpace& modelspace);
  Operator TCM_Op(ModelSpace& modelspace);
  Operator HCM_Op(ModelSpace& modelspace);
+ Operator Trel_Masscorrection_Op(ModelSpace& modelspace);
 
  Operator R2CM_Op(ModelSpace& modelspace);
  Operator Rp2_corrected_Op(ModelSpace& modelspace, int A, int Z);
@@ -60,6 +82,7 @@ namespace imsrg_util
  Operator LdotS_Op(ModelSpace& modelspace);
  Operator L2rel_Op(ModelSpace& modelspace);
  Operator LCM_Op(ModelSpace& modelspace);
+ Operator QdotQ_Op(ModelSpace& modelspace);
 
 ////////////////// Double beta decay functions from Charlie Payne ///////////////
  Operator M0nu_TBME_Op(ModelSpace& modelspace, int Nquad, string src); // put in by CP, it is still in development

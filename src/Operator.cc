@@ -8,6 +8,7 @@
 #include <deque>
 #include <gsl/gsl_math.h>
 #include <math.h>
+#include "omp.h"
 
 #ifndef SQRT2
   #define SQRT2 1.4142135623730950488L
@@ -26,6 +27,7 @@ double  Operator::bch_transform_threshold = 1e-9;
 double  Operator::bch_product_threshold = 1e-4;
 bool Operator::use_brueckner_bch = false;
 bool Operator::use_goose_tank_correction = false;
+bool Operator::use_goose_tank_correction_titus = false;
 
 Operator& Operator::TempOp(size_t n)
 {
@@ -404,7 +406,7 @@ Operator Operator::DoNormalOrdering2()
                 else
                 {
                    double jh = oh.j2*0.5;
-                   if ((ja+jh < J_bra) or (abs(ja-jh)>J_bra) or (jb+jh < J_ket) or (abs(jb-jh)>J_ket) ) continue;
+                   if ((ja+jh < J_bra) or (std::abs(ja-jh)>J_bra) or (jb+jh < J_ket) or (std::abs(jb-jh)>J_ket) ) continue;
                    if ((oa.l + oh.l + tbc_bra.parity)%2 >0) continue;
                    if ((ob.l + oh.l + tbc_ket.parity)%2 >0) continue;
                    if ((oa.tz2 + oh.tz2) != tbc_bra.Tz*2) continue;
@@ -474,7 +476,7 @@ Operator Operator::DoNormalOrdering3()
                Orbit & oa = modelspace->GetOrbit(a);
                if ( (2*(oi.n+oj.n+oa.n)+oi.l+oj.l+oa.l)>E3max) continue;
                if ( (2*(ok.n+ol.n+oa.n)+ok.l+ol.l+oa.l)>E3max) continue;
-               int kmin2 = abs(2*tbc.J-oa.j2);
+               int kmin2 = std::abs(2*tbc.J-oa.j2);
                int kmax2 = 2*tbc.J+oa.j2;
                for (int K2=kmin2; K2<=kmax2; K2+=2)
                {
@@ -561,7 +563,7 @@ Operator Operator::UndoNormalOrdering() const
               else
               {
                  double jh = oh.j2*0.5;
-                 if ((ja+jh < J_bra) or (abs(ja-jh)>J_bra) or (jb+jh < J_ket) or (abs(jb-jh)>J_ket) ) continue;
+                 if ((ja+jh < J_bra) or (std::abs(ja-jh)>J_bra) or (jb+jh < J_ket) or (std::abs(jb-jh)>J_ket) ) continue;
 
                  if ((oa.l + oh.l + tbc_bra.parity)%2 >0) continue;
                  if ((ob.l + oh.l + tbc_ket.parity)%2 >0) continue;
@@ -782,6 +784,7 @@ void Operator::ScaleTwoBody(double x)
    TwoBody.Scale(x);
 }
 
+// This is unused
 void Operator::Eye()
 {
    ZeroBody = 1;
@@ -811,7 +814,7 @@ double Operator::GetMP2_Energy()
      {
        Orbit& oa = modelspace->GetOrbit(a);
        double ea = OneBody(a,a);
-       if (abs(OneBody(i,a))>1e-6)
+       if (std::abs(OneBody(i,a))>1e-6)
          Emp2 += (oa.j2+1) * oa.occ * OneBody(i,a)*OneBody(i,a)/(OneBody(a,a)-OneBody(i,i));
        for (index_t j : modelspace->particles)
        {
@@ -824,12 +827,12 @@ double Operator::GetMP2_Energy()
            Orbit& ob = modelspace->GetOrbit(b);
            double eb = OneBody(b,b);
            double denom = ea+eb-ei-ej;
-           int Jmin = max(abs(oi.j2-oj.j2),abs(oa.j2-ob.j2))/2;
+           int Jmin = max(std::abs(oi.j2-oj.j2),std::abs(oa.j2-ob.j2))/2;
            int Jmax = min(oi.j2+oj.j2,oa.j2+ob.j2)/2;
            for (int J=Jmin; J<=Jmax; ++J)
            {
              double tbme = TwoBody.GetTBME_J_norm(J,a,b,i,j);
-             if (abs(tbme)>1e-6)
+             if (std::abs(tbme)>1e-6)
               Emp2 += (2*J+1)* oa.occ * ob.occ * tbme*tbme/denom; // no factor 1/4 because of the restricted sum
            }
          }
@@ -915,11 +918,12 @@ double Operator::GetMP3_Energy()
      for (auto a : modelspace->holes)
      {
       double ja = 0.5*modelspace->GetOrbit(a).j2;
-      int J_min = abs(ja-ji);
+      int J_min = std::abs(ja-ji);
       int J_max = ja+ji;
       for (int J_tot=J_min;J_tot<=J_max;++J_tot)
       {
-       double Jfactor = (2*J_tot + 1)*(2*J_tot + 1) ; // I don't yet understand why it's (2J+1)**2, but this is what came from Johannes.
+       double Jfactor = (2*J_tot + 1) ; // I don't yet understand why it's (2J+1)**2, but this is what came from Johannes.
+//       double Jfactor = (2*J_tot + 1)*(2*J_tot + 1) ; // I don't yet understand why it's (2J+1)**2, but this is what came from Johannes.
        for (auto b : modelspace->holes)
        {
         double jb = 0.5*modelspace->GetOrbit(b).j2;
@@ -927,8 +931,8 @@ double Operator::GetMP3_Energy()
         {
          double jj = 0.5*modelspace->GetOrbit(j).j2;
          double Delta_abij = OneBody(a,a) + OneBody(b,b) - OneBody(i,i) - OneBody(j,j);
-         int J1min = max(abs(ja-jb),abs(ji-jj));
-         int J1max = min(ja+jb,ji+jj);
+         int J1min = std::max(std::abs(ja-jb),std::abs(ji-jj));
+         int J1max = std::min(ja+jb,ji+jj);
          double tbme_abij = 0;
          if ( AngMom::Triangle(jj,jb,J_tot) )
          {
@@ -945,8 +949,8 @@ double Operator::GetMP3_Energy()
              double jk = 0.5*modelspace->GetOrbit(k).j2;
              if ( not AngMom::Triangle(jc,jk,J_tot) ) continue;
              double Delta_acik = OneBody(a,a) + OneBody(c,c) - OneBody(i,i) - OneBody(k,k);
-             int J2min = max(abs(jc-jj),abs(jk-jb));
-             int J2max = min(jc+jj,jk+jb);
+             int J2min = std::max(std::abs(jc-jj),std::abs(jk-jb));
+             int J2max = std::min(jc+jj,jk+jb);
              double tbme_cjkb = 0;
              if ( AngMom::Triangle(jj,jb,J_tot) )
              {
@@ -955,8 +959,8 @@ double Operator::GetMP3_Energy()
                  tbme_cjkb -= modelspace->GetSixJ(jj,jb,J_tot,jk,jc,J2) * (2*J2 + 1) *  TwoBody.GetTBME_J(J2,j,c,k,b);
                }
              }
-             int J3min = max(abs(ji-jk),abs(ja-jc));
-             int J3max = min(ji+jk,ja+jc);
+             int J3min = std::max(std::abs(ji-jk),std::abs(ja-jc));
+             int J3max = std::min(ji+jk,ja+jc);
              double tbme_ikac = 0;
              for (int J3=J3min;J3<=J3max;++J3) // Pandya 3:   <kc`| V | ai`>_Jtot
              {
@@ -1012,7 +1016,7 @@ double Operator::GetMP3_Energy()
                  if (p==i and q==j) continue; 
                  double Delta_abpq = OneBody(a,a)+OneBody(b,b)-OneBody(p,p)-OneBody(q,q);
                  double Delta_apiq = OneBody(a,a)+OneBody(p,p)-OneBody(i,i)-OneBody(q,q);
-                 int Jmin =  max(abs(op.j2-oq.j2),max(abs(oi.j2-oj.j2),abs(oa.j2-ob.j2)))/2;
+                 int Jmin =  max(std::abs(op.j2-oq.j2),max(std::abs(oi.j2-oj.j2),std::abs(oa.j2-ob.j2)))/2;
                  int Jmax =  min(op.j2+oq.j2,min(oi.j2+oj.j2,oa.j2+ob.j2))/2;
                  for (int J=Jmin;J<=Jmax;++J)
                  {
@@ -1137,21 +1141,36 @@ Operator Operator::Standard_BCH_Transform( const Operator &Omega)
    double nx = Norm();
    double ny = Omega.Norm();
    Operator OpOut = *this;
+   double factorial_denom = 1.0;
+   Operator goosetank_chi;  // auxiliary one-body operator used to recover 4th-order quadruples.
+   if (use_goose_tank_correction)
+   {
+     goosetank_chi = *this;
+     goosetank_chi.SetParticleRank(1);
+     goosetank_chi.Erase();
+   }
    if (nx>bch_transform_threshold)
    {
      Operator OpNested = *this;
      double epsilon = nx * exp(-2*ny) * bch_transform_threshold / (2*ny);
      for (int i=1; i<=max_iter; ++i)
      {
-        if (use_goose_tank_correction and i>=3)
-        {
-            OpNested.GooseTank(*this,Omega);
-        }
 
-        Operator tmp1 = Commutator(Omega,OpNested);
-        tmp1 /= i;
-        OpNested = tmp1;
-        OpOut += OpNested;
+        if (use_goose_tank_correction  )
+        {
+          auto chi_last = goosetank_chi.OneBody;
+          goosetank_chi.GooseTankUpdate( Omega, OpNested);
+//          OpNested.OneBody += goosetank_chi.OneBody;  // add the chi from the previous step to OpNested.
+          OpNested.OneBody += chi_last;  // add the chi from the previous step to OpNested.
+        }
+        
+
+        OpNested = Commutator(Omega,OpNested); // the ith nested commutator
+//        Operator tmp1 = Commutator(Omega,OpNested); // the ith nested commutator
+        factorial_denom /= i;
+//        tmp1 /= i;
+//        OpNested = tmp1;
+        OpOut += factorial_denom * OpNested;
   
         if (this->rank_J > 0)
         {
@@ -1169,6 +1188,39 @@ Operator Operator::Standard_BCH_Transform( const Operator &Omega)
    profiler.timer["BCH_Transform"] += omp_get_wtime() - t_start;
    return OpOut;
 }
+
+
+//  Update the auxiliary one-body operator chi, using Omega and the ith nested commutator
+//  This has not been tested for tensor commutators, but it *should* work.
+//  Of course, there's not as clean a motivation in terms of perturbation theory for the tensors...
+// 
+void Operator::GooseTankUpdate( const Operator& Omega, const Operator& OpNested)
+{
+   double t_start = omp_get_wtime();
+   auto& goosetank_chi = *this;
+   goosetank_chi.EraseOneBody();
+   if (this->rank_J==0 )
+   {
+     goosetank_chi.comm221ss( Omega, OpNested );  // update chi.
+   }
+   else
+   {
+     goosetank_chi.comm222_pp_hh_221st( Omega, OpNested );  // update chi.
+   }
+   goosetank_chi.Symmetrize(); // the commutator call only does half the matrix, so we symmetrize
+   int norbits = modelspace->GetNumberOrbits();
+   for (int i=0;i<norbits;++i)  // enforce n_in_j + nbar_i nbar_j
+   {
+     Orbit &oi = modelspace->GetOrbit(i);
+     for (int j=0;j<norbits;++j)
+     {
+      Orbit &oj = modelspace->GetOrbit(j);
+      goosetank_chi.OneBody(i,j) *=  oi.occ*oj.occ + (1.0-oi.occ)*(1.0-oj.occ) ;
+      }
+   }
+   profiler.timer["GooseTankUpdate"] += omp_get_wtime() - t_start;
+}
+
 
 /*
 Operator Operator::Standard_BCH_Transform( const Operator &Omega)
@@ -1251,9 +1303,26 @@ Operator Operator::BCH_Product(  Operator &Y)
    vector<double> factorial = {1.0,  1.0,  2.0, 6.0,    24.,  120.,   720., 5040.,  40320.};
 
 
+//   Operator goosetank_chi;  // auxiliary one-body operator used to recover 4th-order quadruples.
+
+
+
+
+
    Operator Z = X + Y;
+//   if (use_goose_tank_correction) return Z; // Not sure why this is here
    Operator Nested = Y;
    Nested.SetToCommutator(Y,X);
+
+//   if (use_goose_tank_correction)
+//   {
+//     goosetank_chi = *this;
+//     goosetank_chi.SetParticleRank(1);
+//     goosetank_chi.Erase();
+//     goosetank_chi.GooseTankUpdate( Y, Nested);
+//   }
+
+
    double nxy = Nested.Norm();
    // We assume X is small, but just in case, we check if we should include the [X,[X,Y]] term.
    if ( nxy*nx > bch_product_threshold)
@@ -1267,6 +1336,14 @@ Operator Operator::BCH_Product(  Operator &Y)
    {
      if (k<2 or k%2==0)
         Z += (bernoulli[k]/factorial[k]) * Nested;
+
+//     if (use_goose_tank_correction  and k<2 ) // for the sake of speed, only apply goose tank for first nested commutator here.
+//     {
+//          auto chi_last = goosetank_chi.OneBody;
+//          goosetank_chi.GooseTankUpdate( Y, Nested);
+//          Nested.OneBody += chi_last;  // add the chi from the previous step to OpNested.
+//     }
+
      Nested = Commutator(Y,Nested);
      k++;
    }
@@ -1764,7 +1841,7 @@ void Operator::comm121ss( const Operator& X, const Operator& Y)
              {
                 Orbit &ob = modelspace->GetOrbit(b);
                 double nanb = oa.occ * (1-ob.occ);
-                if (abs(nanb)<OCC_CUT) continue;
+                if (std::abs(nanb)<OCC_CUT) continue;
                 if (Y.particle_rank>1)
                 {
                   Z.OneBody(i,j) += (ob.j2+1) * nanb *  X.OneBody(a,b) * Y.TwoBody.GetTBMEmonopole(b,i,a,j) ;
@@ -1816,11 +1893,12 @@ void Operator::comm121ss( const Operator& X, const Operator& Y)
 void Operator::comm221ss( const Operator& X, const Operator& Y) 
 {
 
+   double t_start = omp_get_wtime();
    Operator& Z = *this;
    int norbits = modelspace->GetNumberOrbits();
 
-   static TwoBodyME Mpp = Z.TwoBody;
-   static TwoBodyME Mhh = Z.TwoBody;
+   static TwoBodyME Mpp = Y.TwoBody;
+   static TwoBodyME Mhh = Y.TwoBody;
 
    // Don't use omp, because the matrix multiplication is already
    // parallelized by armadillo.
@@ -1906,6 +1984,7 @@ void Operator::comm221ss( const Operator& X, const Operator& Y)
       } // for j
    }
 
+   profiler.timer["comm221ss"] += omp_get_wtime() - t_start;
 
 }
 
@@ -2361,13 +2440,13 @@ void Operator::DoPandyaTransformation_SingleChannel(arma::mat& TwoBody_CC_ph, in
          double jd = od.j2*0.5;
 
 
-         int jmin = max(abs(ja-jd),abs(jc-jb));
+         int jmin = max(std::abs(ja-jd),std::abs(jc-jb));
          int jmax = min(ja+jd,jc+jb);
          double Xbar = 0;
          for (int J_std=jmin; J_std<=jmax; ++J_std)
          {
             double sixj = modelspace->GetSixJ(ja,jb,J_cc,jc,jd,J_std);
-            if (abs(sixj) < 1e-8) continue;
+            if (std::abs(sixj) < 1e-8) continue;
             double tbme = TwoBody.GetTBME_J(J_std,a,d,c,b);
             Xbar -= (2*J_std+1) * sixj * tbme ;
          }
@@ -2381,13 +2460,13 @@ void Operator::DoPandyaTransformation_SingleChannel(arma::mat& TwoBody_CC_ph, in
          }
 
          // Exchange (a <-> b) to account for the (n_a - n_b) term
-         jmin = max(abs(jb-jd),abs(jc-ja));
+         jmin = max(std::abs(jb-jd),std::abs(jc-ja));
          jmax = min(jb+jd,jc+ja);
          Xbar = 0;
          for (int J_std=jmin; J_std<=jmax; ++J_std)
          {
             double sixj = modelspace->GetSixJ(jb,ja,J_cc,jc,jd,J_std);
-            if (abs(sixj) < 1e-8) continue;
+            if (std::abs(sixj) < 1e-8) continue;
             double tbme = TwoBody.GetTBME_J(J_std,b,d,c,a);
             Xbar -= (2*J_std+1) * sixj * tbme ;
          }
@@ -2462,9 +2541,9 @@ void Operator::AddInversePandyaTransformation_SingleChannel(arma::mat& Zbar, int
             double commij = 0;
             double commji = 0;
 
-            int jmin = max(abs(int(ji-jl)),abs(int(jk-jj)));
+            int jmin = max(std::abs(int(ji-jl)),std::abs(int(jk-jj)));
             int jmax = min(int(ji+jl),int(jk+jj));
-            if ( ((oi.l+ol.l)%2==parity_cc)  and  (abs(oi.tz2+ol.tz2)==Tz_cc*2) and (Jcc>=jmin) and (Jcc<=jmax) )
+            if ( ((oi.l+ol.l)%2==parity_cc)  and  (std::abs(oi.tz2+ol.tz2)==Tz_cc*2) and (Jcc>=jmin) and (Jcc<=jmax) )
             {
                double sixj = modelspace->GetSixJ(ji,jj,J,jk,jl,Jcc);
                int indx_il = tbc_cc.GetLocalIndex(i,l) ;
@@ -2484,9 +2563,9 @@ void Operator::AddInversePandyaTransformation_SingleChannel(arma::mat& Zbar, int
             else
             {
               // now loop over the cross coupled TBME's
-              jmin = max(abs(int(jj-jl)),abs(int(jk-ji)));
+              jmin = max(std::abs(int(jj-jl)),std::abs(int(jk-ji)));
               jmax = min(int(jj+jl),int(jk+ji));
-              if ( (oi.l+ok.l)%2==parity_cc  and  abs(oi.tz2+ok.tz2)==Tz_cc*2 and Jcc>=jmin and Jcc<=jmax)
+              if ( (oi.l+ok.l)%2==parity_cc  and  std::abs(oi.tz2+ok.tz2)==Tz_cc*2 and Jcc>=jmin and Jcc<=jmax)
               {
                  double sixj = modelspace->GetSixJ(jj,ji,J,jk,jl,Jcc);
                  int indx_ik = tbc_cc.GetLocalIndex(i,k) ;
@@ -2551,13 +2630,13 @@ void Operator::AddInversePandyaTransformation(const deque<arma::mat>& Zbar)
             double commji = 0;
 
             int parity_cc = (oi.l+ol.l)%2;
-            int Tz_cc = abs(oi.tz2+ol.tz2)/2;
-            int jmin = max(abs(int(ji-jl)),abs(int(jk-jj)));
+            int Tz_cc = std::abs(oi.tz2+ol.tz2)/2;
+            int jmin = max(std::abs(int(ji-jl)),std::abs(int(jk-jj)));
             int jmax = min(int(ji+jl),int(jk+jj));
             for (int Jprime=jmin; Jprime<=jmax; ++Jprime)
             {
                double sixj = modelspace->GetSixJ(ji,jj,J,jk,jl,Jprime);
-               if (abs(sixj)<1e-8) continue;
+               if (std::abs(sixj)<1e-8) continue;
                int ch_cc = modelspace->GetTwoBodyChannelIndex(Jprime,parity_cc,Tz_cc);
                TwoBodyChannel_CC& tbc_cc = modelspace->GetTwoBodyChannel_CC(ch_cc);
                int nkets_cc = tbc_cc.GetNumberKets();
@@ -2586,13 +2665,13 @@ void Operator::AddInversePandyaTransformation(const deque<arma::mat>& Zbar)
             {
               // now loop over the cross coupled TBME's
               parity_cc = (oi.l+ok.l)%2;
-              Tz_cc = abs(oi.tz2+ok.tz2)/2;
-              jmin = max(abs(int(jj-jl)),abs(int(jk-ji)));
+              Tz_cc = std::abs(oi.tz2+ok.tz2)/2;
+              jmin = max(std::abs(int(jj-jl)),std::abs(int(jk-ji)));
               jmax = min(int(jj+jl),int(jk+ji));
               for (int Jprime=jmin; Jprime<=jmax; ++Jprime)
               {
                  double sixj = modelspace->GetSixJ(jj,ji,J,jk,jl,Jprime);
-                 if (abs(sixj)<1e-8) continue;
+                 if (std::abs(sixj)<1e-8) continue;
                  int ch_cc = modelspace->GetTwoBodyChannelIndex(Jprime,parity_cc,Tz_cc);
                  TwoBodyChannel_CC& tbc_cc = modelspace->GetTwoBodyChannel_CC(ch_cc);
                  int nkets_cc = tbc_cc.GetNumberKets();
@@ -2854,188 +2933,11 @@ void Operator::comm222_phss( const Operator& X, const Operator& Y )
 
 
 
-// No support for tensor goose tank yet.
-void Operator::GooseTank( const Operator& X, const Operator& Y)
-{
-  if (X.rank_J == 0 and Y.rank_J == 0)
-  {
-    goose_tank_ss(X,Y);
-  }
-
-}
-
-void Operator::goose_tank_ss( const Operator& X, const Operator& Y)
-{
-   double tstart = omp_get_wtime();
-   Operator& Z = *this;
-   TwoBodyME Mpp_G = Z.TwoBody;
-   TwoBodyME Mhh_G = Z.TwoBody;
-   TwoBodyME Mpp_D = Z.TwoBody;
-   TwoBodyME Mhh_D = Z.TwoBody;
-   Mpp_G.Erase();
-   Mhh_G.Erase();
-   Mpp_D.Erase();
-   Mhh_D.Erase();
-   int norbits = modelspace->GetNumberOrbits();
-
-   arma::mat G(norbits,norbits,arma::fill::zeros);
-   arma::mat D(norbits,norbits,arma::fill::zeros);
 
 
-   ConstructScalarMpp_Mhh_GooseTank( Y, Y, Mpp_G, Mhh_G);
-   ConstructScalarMpp_Mhh_GooseTank( X, Y, Mpp_D, Mhh_D);
-
-   int dflip = 1;
-   if ( (X.IsHermitian() and Y.IsAntiHermitian()) or (Y.IsHermitian() and X.IsAntiHermitian()) ) dflip = -1;
-
-   // The one body part
-   #pragma omp parallel for schedule(dynamic,1)
-   for (int i=0;i<norbits;++i)
-   {
-      Orbit &oi = modelspace->GetOrbit(i);
-//      int jmin = Z.IsNonHermitian() ? 0 : i;   // think about this...
-      int jmin = 0;   // think about this...
-      for (int j : Z.OneBodyChannels.at({oi.l,oi.j2,oi.tz2}) )
-      {
-         if (j<jmin) continue;
-         double GijJ = 0;
-         double DijJ = 0;
-         for (int ch=0;ch<nChannels;++ch)
-         {
-            TwoBodyChannel& tbc = modelspace->GetTwoBodyChannel(ch);
-            double Jfactor = (2*tbc.J+1.0);
-            // Sum c over holes and include the nbar_a * nbar_b terms
-            for (auto& c : modelspace->holes)
-            {
-               Orbit& oc = modelspace->GetOrbit(c);
-               GijJ += Jfactor *    oc.occ  * Mpp_G.GetTBME(ch,c,i,c,j); 
-               GijJ -= Jfactor * (1-oc.occ) * Mhh_G.GetTBME(ch,c,i,c,j); 
-               DijJ += Jfactor *    oc.occ  * Mpp_D.GetTBME(ch,c,i,c,j); 
-               DijJ -= Jfactor * (1-oc.occ) * Mhh_D.GetTBME(ch,c,j,c,i) * dflip; 
-            }
-            // Sum c over particles and include the n_a * n_b terms
-            for (auto& c : modelspace->particles)
-            {
-               GijJ += Jfactor * Mhh_G.GetTBME(ch,c,i,c,j);
-               DijJ -= Jfactor * Mhh_D.GetTBME(ch,c,j,c,i) * dflip;
-            }
-         }
-         G(i,j) = GijJ /(oi.j2+1.0);
-         D(i,j) = DijJ /(oi.j2+1.0);
-      } // for j
-   }
-
-  
- 
-   #pragma omp parallel for schedule(dynamic,1)
-   for (int ch=0;ch<nChannels;++ch)
-   {
-      TwoBodyChannel& tbc = modelspace->GetTwoBodyChannel(ch);
-      for (auto ibra : tbc.GetKetIndex_pp())
-      {
-        Ket& bra = tbc.GetKet(ibra);
-        int a = bra.p;
-        int b = bra.q;
-        Orbit& oa = modelspace->GetOrbit(a);
-        Orbit& ob = modelspace->GetOrbit(b);
-        int phaseab = modelspace->phase((oa.j2+ob.j2)/2-tbc.J);
-        for (auto iket : tbc.GetKetIndex_hh())
-        {
-           Ket& ket = tbc.GetKet(iket);
-           int i = ket.p;
-           int j = ket.q;
-           Orbit& oi = modelspace->GetOrbit(i);
-           Orbit& oj = modelspace->GetOrbit(j);
-           int phaseij = modelspace->phase((oi.j2+oj.j2)/2-tbc.J);
-           double xstarij = 0;
-           double xstarab = 0;
-           for ( auto k : modelspace->holes)
-           {
-             Orbit& ok = modelspace->GetOrbit(k);
-             xstarij += (ok.j2+1) *(    X.TwoBody.GetTBME(ch,a,b,k,j) * G(k,i) - Y.TwoBody.GetTBME(ch,a,b,k,j) * D(k,i)
-                            - phaseij*( X.TwoBody.GetTBME(ch,a,b,k,i) * G(k,j) - Y.TwoBody.GetTBME(ch,a,b,k,i) * D(k,j) ) );
-           }
-           for ( auto c : modelspace->particles)
-           {
-             Orbit& oc = modelspace->GetOrbit(c);
-             xstarab -= (oc.j2+1) *(     G(a,c) * X.TwoBody.GetTBME(ch,c,b,i,j)  - D(a,c) * Y.TwoBody.GetTBME(ch,c,b,i,j)
-                           - phaseab * ( G(b,c) * X.TwoBody.GetTBME(ch,c,a,i,j)  - D(b,c) * Y.TwoBody.GetTBME(ch,c,a,i,j) ) );
-           }
-           if (i==j) xstarij /= SQRT2;
-           if (a==b) xstarab /= SQRT2;
-           Z.TwoBody.AddToTBME(ch,ch,ibra,iket,(xstarij+xstarab)*0.25);
-        }
-      }
-   }
-
-   profiler.timer["GooseTank"] += omp_get_wtime() - tstart;
-
-}
 
 
-void Operator::ConstructScalarMpp_Mhh_GooseTank(const Operator& X, const Operator& Y, TwoBodyME& Mpp, TwoBodyME& Mhh) const
-{
-   int nch = modelspace->SortedTwoBodyChannels.size();
-//   Operator& Z = *this;
-//   bool z_is_hermitian = IsHermitian();
-//   bool z_is_antihermitian = IsAntiHermitian();
-//   bool z_is_hermitian = X.IsHermitian() xor Y.IsHermitian();
-//   bool z_is_antihermitian = (X.IsHermitian() == Y.IsHermitian()) and (X.IsAntiHermitian() == Y.IsAntiHermitian());
-   #ifndef OPENBLAS_NOUSEOMP
-   #pragma omp parallel for schedule(dynamic,1)
-   #endif
-   for (int ich=0; ich<nch; ++ich)
-   {
-      int ch = modelspace->SortedTwoBodyChannels[ich];
-      TwoBodyChannel& tbc = modelspace->GetTwoBodyChannel(ch);
 
-      auto& LHS = X.TwoBody.GetMatrix(ch,ch);
-      auto& RHS = Y.TwoBody.GetMatrix(ch,ch);
-//      auto& OUT = Z.TwoBody.GetMatrix(ch,ch);
-
-      auto& Matrixpp = Mpp.GetMatrix(ch,ch);
-      auto& Matrixhh = Mhh.GetMatrix(ch,ch);
-
-      auto& kets_pp = tbc.GetKetIndex_pp();
-      auto& kets_hh = tbc.GetKetIndex_hh();
-      auto& kets_ph = tbc.GetKetIndex_ph();
-      auto& nanb = tbc.Ket_occ_hh;
-      auto& nbarnbar_hh = tbc.Ket_unocc_hh;
-      auto& nbarnbar_ph = tbc.Ket_unocc_ph;
-      
-      Matrixpp =  LHS.cols(kets_pp) * RHS.rows(kets_pp);
-      Matrixhh =  LHS.cols(kets_hh) * arma::diagmat(nanb) *  RHS.rows(kets_hh) ;
-      if (kets_hh.size()>0)
-        Matrixpp +=  LHS.cols(kets_hh) * arma::diagmat(nbarnbar_hh) *  RHS.rows(kets_hh); 
-      if (kets_ph.size()>0)
-        Matrixpp += LHS.cols(kets_ph) * arma::diagmat(nbarnbar_ph) *  RHS.rows(kets_ph) ;
-
-
-//      if (z_is_hermitian)
-//      {
-//         Matrixpp +=  Matrixpp.t();
-//         Matrixhh +=  Matrixhh.t();
-//      }
-//      else if (z_is_antihermitian) // i.e. LHS and RHS are both hermitian or ant-hermitian
-//      {
-//         Matrixpp -=  Matrixpp.t();
-//         Matrixhh -=  Matrixhh.t();
-//      }
-//      else
-//      {
-//        Matrixpp -=  RHS.cols(kets_pp) * LHS.rows(kets_pp);
-//        Matrixhh -=  RHS.cols(kets_hh) * arma::diagmat(nanb) *  LHS.rows(kets_hh) ;
-//        Matrixpp -=  RHS.cols(kets_hh) * arma::diagmat(nbarnbar_hh) *  LHS.rows(kets_hh) ;
-//        if (kets_ph.size()>0)
-//          Matrixpp -=  RHS.cols(kets_ph) * arma::diagmat(nbarnbar_ph) *  LHS.rows(kets_ph) ;
-//      }
-
-
-      // The two body part
-//      OUT += Matrixpp - Matrixhh;
-   } //for ch
-
-}
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -3101,16 +3003,16 @@ void Operator::comm121st( const Operator& X, const Operator& Y)
              {
                 Orbit &ob = modelspace->GetOrbit(b);
                 double nanb = oa.occ * (1-ob.occ);
-                  int J1min = abs(ji-ja);
+                  int J1min = std::abs(ji-ja);
                   int J1max = ji + ja;
                   for (int J1=J1min; J1<=J1max; ++J1)
                   {
                     int phasefactor = modelspace->phase(jj+ja+J1+Lambda);
-                    int J2min = max(abs(Lambda - J1),abs(int(ja-jj)));
+                    int J2min = max(std::abs(Lambda - J1),std::abs(int(ja-jj)));
                     int J2max = min(Lambda + J1,int(ja+jj));
                     for (int J2=J2min; J2<=J2max; ++J2)
                     {
-                      if ( ! ( J2>=abs(ja-jj) and J2<=ja+jj )) continue;
+                      if ( ! ( J2>=std::abs(ja-jj) and J2<=ja+jj )) continue;
                       double prefactor = nanb*phasefactor * sqrt((2*J1+1)*(2*J2+1)) * modelspace->GetSixJ(J1,J2,Lambda,jj,ji,ja);
                       Zij +=  prefactor * ( X.OneBody(a,b) * Y.TwoBody.GetTBME_J(J1,J2,b,i,a,j) - X.OneBody(b,a) * Y.TwoBody.GetTBME_J(J1,J2,a,i,b,j ));
                     }
@@ -3122,9 +3024,9 @@ void Operator::comm121st( const Operator& X, const Operator& Y)
 
                 Orbit &ob = modelspace->GetOrbit(b);
                 double jb = 0.5*ob.j2;
-                if (abs(ob.occ-1) < OCC_CUT) continue;
+                if (std::abs(ob.occ-1) < OCC_CUT) continue;
                 double nanb = oa.occ * (1-ob.occ);
-                int J1min = max(abs(ji-jb),abs(jj-ja));
+                int J1min = max(std::abs(ji-jb),std::abs(jj-ja));
                 int J1max = min(ji+jb,jj+ja);
                 double zij = 0;
                 for (int J1=J1min; J1<=J1max; ++J1)
@@ -3132,7 +3034,7 @@ void Operator::comm121st( const Operator& X, const Operator& Y)
                   zij -= modelspace->phase(ji+jb+J1) * (2*J1+1) * modelspace->GetSixJ(ja,jb,Lambda,ji,jj,J1) * X.TwoBody.GetTBME_J(J1,J1,b,i,a,j);
                 }
 
-                J1min = max(abs(ji-ja),abs(jj-jb));
+                J1min = max(std::abs(ji-ja),std::abs(jj-jb));
                 J1max = min(ji+ja,jj+jb);
                 for (int J1=J1min; J1<=J1max; ++J1)
                 {
@@ -3326,9 +3228,9 @@ void Operator::comm222_pp_hh_221st( const Operator& X, const Operator& Y )
    Operator& Z = *this;
    int Lambda = Z.GetJRank();
 
-   TwoBodyME Mpp = Z.TwoBody;
-   TwoBodyME Mhh = Z.TwoBody;
-   TwoBodyME Mff = Z.TwoBody;
+   TwoBodyME Mpp = Y.TwoBody;
+   TwoBodyME Mhh = Y.TwoBody;
+   TwoBodyME Mff = Y.TwoBody;
 
    vector<int> vch_bra;
    vector<int> vch_ket;
@@ -3346,7 +3248,7 @@ void Operator::comm222_pp_hh_221st( const Operator& X, const Operator& Y )
    {
     int ch_bra = vch_bra[i];
     int ch_ket = vch_ket[i];
-    auto& Z2 = Z.TwoBody.GetMatrix(ch_bra,ch_ket);
+//    auto& Z2 = Z.TwoBody.GetMatrix(ch_bra,ch_ket);
 
     TwoBodyChannel& tbc_bra = modelspace->GetTwoBodyChannel(ch_bra);
     TwoBodyChannel& tbc_ket = modelspace->GetTwoBodyChannel(ch_ket);
@@ -3387,7 +3289,11 @@ void Operator::comm222_pp_hh_221st( const Operator& X, const Operator& Y )
     Matrixpp = MLeft * MRight;
                                 
 
-    Z2 += Matrixpp - Matrixhh;
+    if (Z.GetParticleRank()>1)
+    {
+      Z.TwoBody.GetMatrix(ch_bra,ch_ket) += Matrixpp - Matrixhh;
+    }
+//    Z2 += Matrixpp - Matrixhh;
 
    }// for itmat
 
@@ -3410,11 +3316,11 @@ void Operator::comm222_pp_hh_221st( const Operator& X, const Operator& Y )
            {
               Orbit &oc = modelspace->GetOrbit(c);
               double jc = oc.j2/2.0;
-              int j1min = abs(jc-ji);
+              int j1min = std::abs(jc-ji);
               int j1max = jc+ji;
               for (int J1=j1min; J1<=j1max; ++J1)
               {
-               int j2min = max(int(abs(jc-jj)),abs(Lambda-J1));
+               int j2min = max(int(std::abs(jc-jj)),std::abs(Lambda-J1));
                int j2max = min(int(jc+jj),J1+Lambda); 
                for (int J2=j2min; J2<=j2max; ++J2)
                {
@@ -3431,11 +3337,11 @@ void Operator::comm222_pp_hh_221st( const Operator& X, const Operator& Y )
            {
               Orbit &oc = modelspace->GetOrbit(c);
               double jc = oc.j2/2.0;
-              int j1min = abs(jc-ji);
+              int j1min = std::abs(jc-ji);
               int j1max = jc+ji;
               for (int J1=j1min; J1<=j1max; ++J1)
               {
-               int j2min = max(int(abs(jc-jj)),abs(Lambda-J1));
+               int j2min = max(int(std::abs(jc-jj)),std::abs(Lambda-J1));
                int j2max = min(int(jc+jj),J1+Lambda); 
                for (int J2=j2min; J2<=j2max; ++J2)
                {
@@ -3511,7 +3417,7 @@ void Operator::DoTensorPandyaTransformation( map<array<index_t,2>,arma::mat>& Tw
       {
         TwoBodyChannel& tbc_ket_cc = modelspace->GetTwoBodyChannel_CC(ch_ket_cc);
         int Jket_cc = tbc_ket_cc.J;
-        if ( (Jbra_cc+Jket_cc < rank_J) or abs(Jbra_cc-Jket_cc)>rank_J ) continue;
+        if ( (Jbra_cc+Jket_cc < rank_J) or std::abs(Jbra_cc-Jket_cc)>rank_J ) continue;
         if ( (tbc_bra_cc.parity + tbc_ket_cc.parity + parity)%2>0 ) continue;
 
         index_t nKets_cc = tbc_ket_cc.GetNumberKets();
@@ -3542,17 +3448,17 @@ void Operator::DoTensorPandyaTransformation( map<array<index_t,2>,arma::mat>& Tw
               double jd = od.j2*0.5;
 
 
-              int j1min = abs(ja-jd);
+              int j1min = std::abs(ja-jd);
               int j1max = ja+jd;
               double sm = 0;
               for (int J1=j1min; J1<=j1max; ++J1)
               {
-                int j2min = max(int(abs(jc-jb)),abs(J1-Lambda));
+                int j2min = max(int(std::abs(jc-jb)),std::abs(J1-Lambda));
                 int j2max = min(int(jc+jb),J1+Lambda);
                 for (int J2=j2min; J2<=j2max; ++J2)
                 {
                   double ninej = modelspace->GetNineJ(ja,jd,J1,jb,jc,J2,Jbra_cc,Jket_cc,Lambda);
-                  if (abs(ninej) < 1e-8) continue;
+                  if (std::abs(ninej) < 1e-8) continue;
                   double hatfactor = sqrt( (2*J1+1)*(2*J2+1)*(2*Jbra_cc+1)*(2*Jket_cc+1) );
                   double tbme = TwoBody.GetTBME_J(J1,J2,a,d,c,b);
                   sm -= hatfactor * modelspace->phase(jb+jd+Jket_cc+J2) * ninej * tbme ;
@@ -3563,17 +3469,17 @@ void Operator::DoTensorPandyaTransformation( map<array<index_t,2>,arma::mat>& Tw
 
               // Exchange (a <-> b) to account for the (n_a - n_b) term
               // Get Tz,parity and range of J for <bd || ca > coupling
-              j1min = abs(jb-jd);
+              j1min = std::abs(jb-jd);
               j1max = jb+jd;
               sm = 0;
               for (int J1=j1min; J1<=j1max; ++J1)
               {
-                int j2min = max(int(abs(jc-ja)),abs(J1-Lambda));
+                int j2min = max(int(std::abs(jc-ja)),std::abs(J1-Lambda));
                 int j2max = min(int(jc+ja),J1+Lambda);
                 for (int J2=j2min; J2<=j2max; ++J2)
                 {
                   double ninej = modelspace->GetNineJ(jb,jd,J1,ja,jc,J2,Jbra_cc,Jket_cc,Lambda);
-                  if (abs(ninej) < 1e-8) continue;
+                  if (std::abs(ninej) < 1e-8) continue;
                   double hatfactor = sqrt( (2*J1+1)*(2*J2+1)*(2*Jbra_cc+1)*(2*Jket_cc+1) );
                   double tbme = TwoBody.GetTBME_J(J1,J2,b,d,c,a);
                   sm -= hatfactor * modelspace->phase(ja+jd+Jket_cc+J2) * ninej * tbme ;
@@ -3610,7 +3516,7 @@ void Operator::DoTensorPandyaTransformation_SingleChannel( arma::mat& MatCC_ph, 
 
    int Jbra_cc = tbc_bra_cc.J;
    int Jket_cc = tbc_ket_cc.J;
-   if ( (Jbra_cc+Jket_cc < rank_J) or abs(Jbra_cc-Jket_cc)>rank_J ) return;
+   if ( (Jbra_cc+Jket_cc < rank_J) or std::abs(Jbra_cc-Jket_cc)>rank_J ) return;
    if ( (tbc_bra_cc.parity + tbc_ket_cc.parity + parity)%2>0 ) return;
 
 
@@ -3639,17 +3545,17 @@ void Operator::DoTensorPandyaTransformation_SingleChannel( arma::mat& MatCC_ph, 
          double jd = od.j2*0.5;
 
 
-         int j1min = abs(ja-jd);
+         int j1min = std::abs(ja-jd);
          int j1max = ja+jd;
          double sm = 0;
          for (int J1=j1min; J1<=j1max; ++J1)
          {
-           int j2min = max(int(abs(jc-jb)),abs(J1-Lambda));
+           int j2min = max(int(std::abs(jc-jb)),std::abs(J1-Lambda));
            int j2max = min(int(jc+jb),J1+Lambda);
            for (int J2=j2min; J2<=j2max; ++J2)
            {
              double ninej = modelspace->GetNineJ(ja,jd,J1,jb,jc,J2,Jbra_cc,Jket_cc,Lambda);
-             if (abs(ninej) < 1e-8) continue;
+             if (std::abs(ninej) < 1e-8) continue;
              double hatfactor = sqrt( (2*J1+1)*(2*J2+1)*(2*Jbra_cc+1)*(2*Jket_cc+1) );
              double tbme = TwoBody.GetTBME_J(J1,J2,a,d,c,b);
              sm -= hatfactor * modelspace->phase(jb+jd+Jket_cc+J2) * ninej * tbme ;
@@ -3666,17 +3572,17 @@ void Operator::DoTensorPandyaTransformation_SingleChannel( arma::mat& MatCC_ph, 
          {
 
            // Get Tz,parity and range of J for <bd || ca > coupling
-           j1min = abs(jb-jd);
+           j1min = std::abs(jb-jd);
            j1max = jb+jd;
            sm = 0;
            for (int J1=j1min; J1<=j1max; ++J1)
            {
-             int j2min = max(int(abs(jc-ja)),abs(J1-Lambda));
+             int j2min = max(int(std::abs(jc-ja)),std::abs(J1-Lambda));
              int j2max = min(int(jc+ja),J1+Lambda);
              for (int J2=j2min; J2<=j2max; ++J2)
              {
                double ninej = modelspace->GetNineJ(jb,jd,J1,ja,jc,J2,Jbra_cc,Jket_cc,Lambda);
-               if (abs(ninej) < 1e-8) continue;
+               if (std::abs(ninej) < 1e-8) continue;
                double hatfactor = sqrt( (2*J1+1)*(2*J2+1)*(2*Jbra_cc+1)*(2*Jket_cc+1) );
                double tbme = TwoBody.GetTBME_J(J1,J2,b,d,c,a);
                sm -= hatfactor * modelspace->phase(ja+jd+Jket_cc+J2) * ninej * tbme ;
@@ -3767,13 +3673,13 @@ void Operator::AddInverseTensorPandyaTransformation_SingleChannel(arma::mat& Zba
             double commji = 0;
 
             // Transform Z_ilkj
-            int j3min = abs(int(ji-jl));
+            int j3min = std::abs(int(ji-jl));
             int j3max = ji+jl;
-            int j4min = abs(int(jk-jj));
+            int j4min = std::abs(int(jk-jj));
             int j4max = int(jk+jj);
 
             if (   (oi.l+ol.l)%2==parity_bra_cc             and (ok.l+oj.l)%2==parity_ket_cc
-                      and abs(oi.tz2+ol.tz2)==2*Tz_bra_cc   and abs(ok.tz2+oj.tz2)==2*Tz_ket_cc
+                      and std::abs(oi.tz2+ol.tz2)==2*Tz_bra_cc   and std::abs(ok.tz2+oj.tz2)==2*Tz_ket_cc
                       and j3min<=J3 and J3<=j3max           and j4min<=J4 and J4<=j4max )
             {
                int indx_il = tbc_bra_cc.GetLocalIndex(min(i,l),max(i,l));
@@ -3789,7 +3695,7 @@ void Operator::AddInverseTensorPandyaTransformation_SingleChannel(arma::mat& Zba
             }
 
             if (  ch_bra_cc != ch_ket_cc  and (oi.l+ol.l)%2==parity_ket_cc        and (ok.l+oj.l)%2==parity_bra_cc
-                                            and abs(oi.tz2+ol.tz2)==2*Tz_ket_cc   and abs(ok.tz2+oj.tz2)==2*Tz_bra_cc
+                                            and std::abs(oi.tz2+ol.tz2)==2*Tz_ket_cc   and std::abs(ok.tz2+oj.tz2)==2*Tz_bra_cc
                                             and j3min<=J4 and J4<=j3max           and j4min<=J3 and J3<=j4max )
               {
                  int indx_kj = tbc_bra_cc.GetLocalIndex(min(j,k),max(j,k));
@@ -3812,12 +3718,12 @@ void Operator::AddInverseTensorPandyaTransformation_SingleChannel(arma::mat& Zba
             }
             else
             {
-              j3min = abs(int(jj-jl));
+              j3min = std::abs(int(jj-jl));
               j3max = jj+jl;
-              j4min = abs(int(jk-ji));
+              j4min = std::abs(int(jk-ji));
               j4max = int(jk+ji);
               if (   (oj.l+ol.l)%2==parity_bra_cc and (ok.l+oi.l)%2==parity_ket_cc
-                      and abs(oj.tz2+ol.tz2)==2*Tz_bra_cc and abs(ok.tz2+oi.tz2)==2*Tz_ket_cc
+                      and std::abs(oj.tz2+ol.tz2)==2*Tz_bra_cc and std::abs(ok.tz2+oi.tz2)==2*Tz_ket_cc
                       and J3>=j3min and J3<=j3max and J4>=j4min and J4<=j4max)
               {
                 // Transform Z_jlki
@@ -3831,7 +3737,7 @@ void Operator::AddInverseTensorPandyaTransformation_SingleChannel(arma::mat& Zba
                inner_loop = true;
               }
               if (ch_bra_cc!=ch_ket_cc and (oj.l+ol.l)%2==parity_ket_cc and (ok.l+oi.l)%2==parity_bra_cc
-                                       and abs(oj.tz2+ol.tz2)==2*Tz_ket_cc and abs(ok.tz2+oi.tz2)==2*Tz_bra_cc
+                                       and std::abs(oj.tz2+ol.tz2)==2*Tz_ket_cc and std::abs(ok.tz2+oi.tz2)==2*Tz_bra_cc
                                        and J4>=j3min and J4<=j3max and J3>=j4min and J3<=j4max)
               {
                 int indx_jl = tbc_ket_cc.GetLocalIndex(min(j,l),max(j,l));
@@ -3920,9 +3826,9 @@ void Operator::AddInverseTensorPandyaTransformation( const map<array<index_t,2>,
             // Transform Z_ilkj
             int parity_bra_cc = (oi.l+ol.l)%2;
             int parity_ket_cc = (ok.l+oj.l)%2;
-            int Tz_bra_cc = abs(oi.tz2+ol.tz2)/2;
-            int Tz_ket_cc = abs(ok.tz2+oj.tz2)/2;
-            int j3min = abs(int(ji-jl));
+            int Tz_bra_cc = std::abs(oi.tz2+ol.tz2)/2;
+            int Tz_ket_cc = std::abs(ok.tz2+oj.tz2)/2;
+            int j3min = std::abs(int(ji-jl));
             int j3max = ji+jl;
             for (int J3=j3min; J3<=j3max; ++J3)
             {
@@ -3930,7 +3836,7 @@ void Operator::AddInverseTensorPandyaTransformation( const map<array<index_t,2>,
               const TwoBodyChannel_CC& tbc_bra_cc = modelspace->GetTwoBodyChannel_CC(ch_bra_cc);
               index_t nbras = tbc_bra_cc.GetNumberKets();
               index_t indx_il = tbc_bra_cc.GetLocalIndex(min(i,l),max(i,l));
-              int j4min = max(abs(int(jk-jj)),abs(J3-Lambda));
+              int j4min = max(std::abs(int(jk-jj)),std::abs(J3-Lambda));
               int j4max = min(int(jk+jj),J3+Lambda);
               for (int J4=j4min; J4<=j4max; ++J4)
               {
@@ -3940,7 +3846,7 @@ void Operator::AddInverseTensorPandyaTransformation( const map<array<index_t,2>,
                  index_t indx_kj = tbc_ket_cc.GetLocalIndex(min(j,k),max(j,k));
 
                   double ninej = modelspace->GetNineJ(ji,jl,J3,jj,jk,J4,J1,J2,Lambda);
-                  if (abs(ninej) < 1e-8) continue;
+                  if (std::abs(ninej) < 1e-8) continue;
                   double hatfactor = sqrt( (2*J1+1)*(2*J2+1)*(2*J3+1)*(2*J4+1) );
                   double tbme = 0;
                   index_t ch_lo = min(ch_bra_cc,ch_ket_cc);
@@ -3961,10 +3867,10 @@ void Operator::AddInverseTensorPandyaTransformation( const map<array<index_t,2>,
                   }
                   commij += hatfactor * modelspace->phase(jj+jl+J2+J4) * ninej * tbme ;
 
-                  if (J1==0 and J2==0 and i==0 and j==18 and k==1 and l==5 and abs(tbme)>1e-7 and abs(ninej)>1e-7)
-                  {
-                    cout << "    " << J3 << " " << J4 << "  " << hatfactor << " "  << modelspace->phase(jj+jl+J2+J4) << " " << ninej << " " << tbme << " " << commij << endl;
-                  }
+//                  if (J1==0 and J2==0 and i==0 and j==18 and k==1 and l==5 and std::abs(tbme)>1e-7 and std::abs(ninej)>1e-7)
+//                  {
+//                    cout << "    " << J3 << " " << J4 << "  " << hatfactor << " "  << modelspace->phase(jj+jl+J2+J4) << " " << ninej << " " << tbme << " " << commij << endl;
+//                  }
               }
             }
 
@@ -3977,9 +3883,9 @@ void Operator::AddInverseTensorPandyaTransformation( const map<array<index_t,2>,
               // Transform Z_jlki
               parity_bra_cc = (oj.l+ol.l)%2;
               parity_ket_cc = (ok.l+oi.l)%2;
-              Tz_bra_cc = abs(oj.tz2+ol.tz2)/2;
-              Tz_ket_cc = abs(ok.tz2+oi.tz2)/2;
-              j3min = abs(int(jj-jl));
+              Tz_bra_cc = std::abs(oj.tz2+ol.tz2)/2;
+              Tz_ket_cc = std::abs(ok.tz2+oi.tz2)/2;
+              j3min = std::abs(int(jj-jl));
               j3max = jj+jl;
   
               for (int J3=j3min; J3<=j3max; ++J3)
@@ -3988,7 +3894,7 @@ void Operator::AddInverseTensorPandyaTransformation( const map<array<index_t,2>,
                 const TwoBodyChannel_CC& tbc_bra_cc = modelspace->GetTwoBodyChannel_CC(ch_bra_cc);
                 int nbras = tbc_bra_cc.GetNumberKets();
                 int indx_jl = tbc_bra_cc.GetLocalIndex(min(j,l),max(j,l));
-                int j4min = max(abs(int(jk-ji)),abs(J3-Lambda));
+                int j4min = max(std::abs(int(jk-ji)),std::abs(J3-Lambda));
                 int j4max = min(int(jk+ji),J3+Lambda);
                 for (int J4=j4min; J4<=j4max; ++J4)
                 {
@@ -3997,7 +3903,7 @@ void Operator::AddInverseTensorPandyaTransformation( const map<array<index_t,2>,
                    int nkets = tbc_ket_cc.GetNumberKets();
                    int indx_ki = tbc_ket_cc.GetLocalIndex(min(k,i),max(k,i));
                     double ninej = modelspace->GetNineJ(jj,jl,J3,ji,jk,J4,J1,J2,Lambda);
-                    if (abs(ninej) < 1e-8) continue;
+                    if (std::abs(ninej) < 1e-8) continue;
                     double hatfactor = sqrt( (2*J1+1)*(2*J2+1)*(2*J3+1)*(2*J4+1) );
   
                     index_t ch_lo = min(ch_bra_cc,ch_ket_cc);
@@ -4026,10 +3932,10 @@ void Operator::AddInverseTensorPandyaTransformation( const map<array<index_t,2>,
             double norm = bra.delta_pq()==ket.delta_pq() ? 1+bra.delta_pq() : SQRT2;
             Zijkl(ibra,iket) +=  (commij - modelspace->phase(ji+jj-J1)*commji) / norm;
             if (ch_bra==ch_ket) Zijkl(iket,ibra) = hZ * Zijkl(ibra,iket);
-            if (J1==0 and J2==0 and i==0 and j==18 and k==1 and l==5 )
-            {
-              cout << "debug: adding term with commij = " << commij << "  and commji = " << commji << " :   (" << ch_bra << ", " << ch_ket << ") " << ibra << " " << iket << "  norm = " << norm << " -> " << Zijkl(ibra,iket) << endl;
-            }
+//            if (J1==0 and J2==0 and i==0 and j==18 and k==1 and l==5 )
+//            {
+//              cout << "debug: adding term with commij = " << commij << "  and commji = " << commji << " :   (" << ch_bra << ", " << ch_ket << ") " << ibra << " " << iket << "  norm = " << norm << " -> " << Zijkl(ibra,iket) << endl;
+//            }
          }
       }
    }
